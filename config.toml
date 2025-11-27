@@ -12,8 +12,10 @@ max_retries = 3
 max_parse_retries = 2
 
 [models]
-default = "claude-sonnet-4-5-20250514"
-validation = "gpt-5.1"
+# Development: use claude-sonnet-4-20250514 for speed
+# Production: use claude-sonnet-4-5-20250514 for quality
+default = "claude-sonnet-4-5-20250929"
+validation = "claude-opus-4-5-20251101"  # TODO: switch to gpt-5.1 for production
 naming = "claude-3-5-haiku-20241022"
 
 [retry]
@@ -27,44 +29,42 @@ exponential_base = 2.0
 
 [layers.plot]
 temperature = 1.0
-max_tokens = 64000
+max_tokens = 8192
 thinking = false
 
 [layers.backstory]
 temperature = 1.0
-max_tokens = 64000
+max_tokens = 8192
 thinking = false
 
 [layers.mpbv]
-model = "gpt-5.1"
+# For development, use sonnet without thinking for speed
+# Production: model = "gpt-5.1", thinking = true
 temperature = 0.7
-max_tokens = 64000
+max_tokens = 8192
 thinking = true
-thinking_budget = 31999
 
 [layers.character]
 temperature = 1.0
-max_tokens = 64000
+max_tokens = 8192
 thinking = false
 
 [layers.stylist]
 temperature = 0.7
-max_tokens = 64000
+max_tokens = 8192
 thinking = false
 
 [layers.chapter]
 temperature = 0.7
-max_tokens = 64000
-thinking = true
-thinking_budget = 31999
+max_tokens = 8192
+thinking = true  # Enable in production
 
 [layers.timeline]
 temperature = 0.3
-max_tokens = 64000
-thinking = true
-thinking_budget = 31999
+max_tokens = 8192
+thinking = true  # Enable in production
 
 [layers.scene]
 temperature = 0.7
-max_tokens = 64000
+max_tokens = 8192
 thinking = false

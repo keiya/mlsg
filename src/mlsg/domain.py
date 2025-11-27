@@ -27,6 +27,10 @@ class MPBV:
     master_plot_markdown: str
     backstories_markdown: str
 
+    def to_combined_markdown(self) -> str:
+        """Combine master plot and backstories into a single markdown string."""
+        return f"# Master Plot\n\n{self.master_plot_markdown}\n\n# Backstories\n\n{self.backstories_markdown}"
+
 
 @dataclass(slots=True)
 class Character:
@@ -34,6 +38,13 @@ class Character:
 
     name: str
     role: str
+    raw_markdown: str
+
+
+@dataclass(slots=True)
+class Stylist:
+    """Writer persona and style guidelines from the Stylist Layer."""
+
     raw_markdown: str
 
 
@@ -83,6 +94,10 @@ class CharacterTimeline:
         ]
         return cls(character_name=character_name, events=events)
 
+    def to_dict(self) -> dict[str, str]:
+        """Convert back to the raw JSON format."""
+        return {event.datetime: event.description for event in self.events}
+
 
 @dataclass(slots=True)
 class TimelineSlice:
@@ -96,7 +111,9 @@ class TimelineSlice:
     characters: dict[str, CharacterTimeline]
 
     @classmethod
-    def from_raw_json(cls, chapter_index: int, raw: dict[str, dict[str, str]]) -> TimelineSlice:
+    def from_raw_json(
+        cls, chapter_index: int, raw: dict[str, dict[str, str]]
+    ) -> TimelineSlice:
         """Create from the raw JSON format produced by the Timeline Layer.
 
         Expected format:
@@ -110,6 +127,10 @@ class TimelineSlice:
             for name, events in raw.items()
         }
         return cls(chapter_index=chapter_index, characters=characters)
+
+    def to_dict(self) -> dict[str, dict[str, str]]:
+        """Convert back to the raw JSON format."""
+        return {name: timeline.to_dict() for name, timeline in self.characters.items()}
 
 
 @dataclass(slots=True)
@@ -137,24 +158,52 @@ class StoryState:
     """
 
     seed_input: str
+    run_name: str = ""
     master_plot: MasterPlot | None = None
     backstories: Backstories | None = None
     mpbv: MPBV | None = None
     characters: list[Character] = field(default_factory=list)
+    stylist: Stylist | None = None
     chapters: list[Chapter] = field(default_factory=list)
     timelines: list[TimelineSlice] = field(default_factory=list)
     scenes: list[Scene] = field(default_factory=list)
 
+    def get_characters_markdown(self) -> str:
+        """Get all characters as a combined markdown string."""
+        if not self.characters:
+            return ""
+        parts = [char.raw_markdown for char in self.characters]
+        return "\n\n---\n\n".join(parts)
+
+    def get_chapter_by_index(self, index: int) -> Chapter | None:
+        """Get a chapter by its index."""
+        for chapter in self.chapters:
+            if chapter.index == index:
+                return chapter
+        return None
+
+    def get_timeline_by_chapter(self, chapter_index: int) -> TimelineSlice | None:
+        """Get timeline for a specific chapter."""
+        for timeline in self.timelines:
+            if timeline.chapter_index == chapter_index:
+                return timeline
+        return None
+
+    def get_scenes_for_chapter(self, chapter_index: int) -> list[Scene]:
+        """Get all scenes for a specific chapter."""
+        return [s for s in self.scenes if s.chapter_index == chapter_index]
+
 
 __all__ = [
-    "MasterPlot",
     "Backstories",
-    "MPBV",
-    "Character",
     "Chapter",
-    "TimelineEvent",
+    "Character",
     "CharacterTimeline",
-    "TimelineSlice",
+    "MPBV",
+    "MasterPlot",
     "Scene",
     "StoryState",
+    "Stylist",
+    "TimelineEvent",
+    "TimelineSlice",
 ]
