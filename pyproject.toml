@@ -1,0 +1,32 @@
+[project]
+name = "mlsg2"
+version = "0.1.0"
+description = "Multi Layered Story Generator (experimental CLI)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+authors = [
+  { name = "mlsg2 user", email = "dev@example.com" }
+]
+dependencies = ["returns>=0.22"]
+
+[project.scripts]
+mlsg = "mlsg.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_any_generics = true
+no_implicit_optional = true
+warn_return_any = true
+warn_unused_ignores = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+

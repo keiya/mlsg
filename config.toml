@@ -1,0 +1,70 @@
+# mlsg2 Configuration
+# See ARCHITECTURE.md for detailed documentation
+
+[general]
+language = "ja"
+runs_dir = "runs"
+
+[limits]
+max_chapters = 20
+max_scenes_per_chapter = 10
+max_retries = 3
+max_parse_retries = 2
+
+[models]
+default = "claude-sonnet-4-5-20250514"
+validation = "gpt-5.1"
+naming = "claude-3-5-haiku-20241022"
+
+[retry]
+max_retries = 3
+initial_delay = 1.0
+max_delay = 60.0
+exponential_base = 2.0
+
+# Layer-specific configurations
+# Each layer can override: model, temperature, max_tokens, thinking, thinking_budget
+
+[layers.plot]
+temperature = 1.0
+max_tokens = 64000
+thinking = false
+
+[layers.backstory]
+temperature = 1.0
+max_tokens = 64000
+thinking = false
+
+[layers.mpbv]
+model = "gpt-5.1"
+temperature = 0.7
+max_tokens = 64000
+thinking = true
+thinking_budget = 31999
+
+[layers.character]
+temperature = 1.0
+max_tokens = 64000
+thinking = false
+
+[layers.stylist]
+temperature = 0.7
+max_tokens = 64000
+thinking = false
+
+[layers.chapter]
+temperature = 0.7
+max_tokens = 64000
+thinking = true
+thinking_budget = 31999
+
+[layers.timeline]
+temperature = 0.3
+max_tokens = 64000
+thinking = true
+thinking_budget = 31999
+
+[layers.scene]
+temperature = 0.7
+max_tokens = 64000
+thinking = false
