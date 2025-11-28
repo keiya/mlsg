@@ -14,8 +14,8 @@ max_parse_retries = 2
 [models]
 # Development: use claude-sonnet-4-20250514 for speed
 # Production: use claude-sonnet-4-5-20250514 for quality
-default = "claude-sonnet-4-5-20250929"
-validation = "claude-opus-4-5-20251101"  # Opus for MPBV validation
+default = "claude-opus-4-5"
+validation = "claude-opus-4-5"  # Opus for MPBV validation
 naming = "claude-3-5-haiku-20241022"
 
 [retry]
@@ -28,46 +28,53 @@ exponential_base = 2.0
 # Each layer can override: model, temperature, max_tokens, thinking, thinking_budget
 
 [layers.plot]
+model = "claude-opus-4-5"  # Use Opus for validation/integration
 temperature = 1.0
 max_tokens = 16000
 thinking = false
 
 [layers.backstory]
+model = "claude-opus-4-5"  # Use Opus for validation/integration
 temperature = 0.9
 max_tokens = 32000
 thinking = true
 thinking_budget = 16000
 
 [layers.mpbv]
-model = "claude-opus-4-5-20251101"  # Use Opus for validation/integration
+model = "claude-opus-4-5"  # Use Opus for validation/integration
 temperature = 0.7
 max_tokens = 64000
 thinking = true
 thinking_budget = 31999
 
 [layers.character]
+model = "claude-opus-4-5"
 temperature = 1.0
 max_tokens = 8192
 thinking = false
 
 [layers.stylist]
+model = "claude-opus-4-5"
 temperature = 0.7
 max_tokens = 8192
 thinking = false
 
 [layers.chapter]
+model = "claude-opus-4-5"
 temperature = 0.7
 max_tokens = 16000
 thinking = true
 thinking_budget = 10000
 
 [layers.timeline]
+model = "claude-opus-4-5"
 temperature = 0.3
 max_tokens = 16000
 thinking = true
 thinking_budget = 10000
 
 [layers.scene]
+model = "claude-sonnet-4-5"
 temperature = 1.0
 max_tokens = 8192
 thinking = false

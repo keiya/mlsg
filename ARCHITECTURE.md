@@ -533,7 +533,6 @@ Jinja2 を使用:
 | `timeline` | str | TimelineSlice の JSON 文字列 |
 | `scene_index` | int | 現在のシーン番号 |
 | `previous_scenes` | str | 前シーンのテキスト (直近 3 シーン) |
-| `previous_scene_summary` | str | 前シーンの要約 |
 
 ---
 

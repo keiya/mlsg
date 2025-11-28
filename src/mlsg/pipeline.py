@@ -26,7 +26,15 @@ from .layers import (
 from .llm.client import AnthropicClient, LLMClient
 from .llm.prompts import PromptLoader
 from .logging import get_logger
-from .persistence import save_state
+from .persistence import (
+    append_chapter_markdown,
+    append_scene_markdown,
+    export_backstory_markdown,
+    export_mpbv_markdown,
+    export_plot_markdown,
+    export_stylist_markdown,
+    save_state,
+)
 
 logger = get_logger(__name__)
 
@@ -196,6 +204,8 @@ def run_pipeline(
                     case Success(new_state):
                         state = new_state
                         save_checkpoint(state, "01_plot")
+                        if runs_dir:
+                            export_plot_markdown(state, runs_dir)
 
             case "backstory":
                 result = generate_backstories(state, client, config, prompt_loader)
@@ -205,6 +215,8 @@ def run_pipeline(
                     case Success(new_state):
                         state = new_state
                         save_checkpoint(state, "02_backstory")
+                        if runs_dir:
+                            export_backstory_markdown(state, runs_dir)
 
             case "mpbv":
                 result = validate_mpbv(state, client, config, prompt_loader)
@@ -214,6 +226,8 @@ def run_pipeline(
                     case Success(new_state):
                         state = new_state
                         save_checkpoint(state, "03_mpbv")
+                        if runs_dir:
+                            export_mpbv_markdown(state, runs_dir)
 
             case "character":
                 result = generate_characters(state, client, config, prompt_loader)
@@ -232,6 +246,8 @@ def run_pipeline(
                     case Success(new_state):
                         state = new_state
                         save_checkpoint(state, "05_stylist")
+                        if runs_dir:
+                            export_stylist_markdown(state, runs_dir)
 
             case "chapter":
                 # Generate chapters iteratively
@@ -248,6 +264,8 @@ def run_pipeline(
                         case Success(new_state):
                             state = new_state
                             save_checkpoint(state, f"06_chapter_{chapter_index + 1:02d}")
+                            if runs_dir:
+                                append_chapter_markdown(state, runs_dir, chapter_index)
 
                     # Check if this is the final chapter
                     chapter = state.get_chapter_by_index(chapter_index)
@@ -299,6 +317,10 @@ def run_pipeline(
                                     state,
                                     f"08_scene_{chapter.index + 1:02d}_{scene_index + 1:02d}",
                                 )
+                                if runs_dir:
+                                    append_scene_markdown(
+                                        state, runs_dir, chapter.index, scene_index
+                                    )
 
                         # Check if this is the final scene
                         scene = new_state.scenes[-1] if new_state.scenes else None

@@ -114,13 +114,6 @@ def generate_scene(
         or (s.chapter_index == chapter_index and s.scene_index < scene_index)
     ]
 
-    # Get previous scene summary and intent
-    previous_scene_summary = ""
-    if all_previous_scenes:
-        # Get the last scene's summary
-        last_scene = all_previous_scenes[-1]
-        previous_scene_summary = last_scene.context_summary or f"直前のシーン: {last_scene.scene_title}"
-
     # Build story so far text
     # Include all previous scenes, grouped by chapter
     previous_scenes_text = ""
@@ -161,7 +154,6 @@ def generate_scene(
         n=chapter_index + 1,
         scene_title=scene_title,
         m=scene_index + 1,
-        previous_scene_summary=previous_scene_summary or "(最初のシーンです)",
         story_so_far_full_text=previous_scenes_text or "(まだシーンがありません)",
         scene_intent_and_events=scene_intent_and_events,
     )
@@ -225,7 +217,6 @@ def generate_scene(
         scene_title=scene_title,
         text=text,
         next_scene_intent=next_intent,
-        context_summary=f"シーン {scene_index + 1}: {scene_intent_and_events[:100]}...",
         is_final_scene=is_final_scene,
     )
 

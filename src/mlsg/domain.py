@@ -145,7 +145,6 @@ class Scene:
     scene_title: str
     text: str
     next_scene_intent: str
-    context_summary: str
     is_final_scene: bool
 
 

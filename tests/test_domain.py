@@ -123,7 +123,6 @@ class TestStoryState:
                 scene_title="Scene 1",
                 text="text1",
                 next_scene_intent="",
-                context_summary="",
                 is_final_scene=False,
             ),
             Scene(
@@ -132,7 +131,6 @@ class TestStoryState:
                 scene_title="Scene 2",
                 text="text2",
                 next_scene_intent="",
-                context_summary="",
                 is_final_scene=True,
             ),
             Scene(
@@ -141,7 +139,6 @@ class TestStoryState:
                 scene_title="Scene 3",
                 text="text3",
                 next_scene_intent="",
-                context_summary="",
                 is_final_scene=False,
             ),
         ]
@@ -249,7 +246,6 @@ class TestScene:
             scene_title="Opening",
             text="The story begins...",
             next_scene_intent="Continue to next scene",
-            context_summary="Introduction",
             is_final_scene=False,
         )
         assert scene.chapter_index == 0

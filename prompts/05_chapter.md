@@ -27,7 +27,6 @@
 
 ## 1. Context
 * **Current Chapter**: 第 {{n}} 章
-* **Max Chapters (Estimate)**: 全 {{max_chapters}} 章 (目安)
 
 ## 2. Global Data
 * **Master Plot & Backstories**:

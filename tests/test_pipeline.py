@@ -49,14 +49,10 @@ class MockLLMClient:
         thinking: bool = False,
         thinking_budget: int | None = None,
     ) -> Result[str, StoryError]:
-        # Match based on unique markers at the start of each template
-        # plot: starts with "# マスタープロット生成"
-        # backstory: starts with "# 世界設定生成"
-        # mpbv: starts with "# マスタープロットと世界設定の検証"
-
+        # Match based on unique markers contained in the prompt
         matched_key: str | None = None
         for key in self.responses:
-            if prompt.startswith(key):
+            if key in prompt:
                 matched_key = key
                 break
 
@@ -260,7 +256,6 @@ class TestIsLayerCompleted:
                     scene_title="Scene 1",
                     text="Scene text",
                     next_scene_intent="",
-                    context_summary="Summary",
                     is_final_scene=True,
                 ),
             ],
@@ -498,3 +493,175 @@ Validated backstory content here."""
         assert isinstance(result, Success)
         # No LLM calls should be made
         assert len(layers_called) == 0
+
+
+class TestMarkdownOutput:
+    """Tests for Markdown file generation during pipeline execution."""
+
+    def test_plot_layer_creates_markdown(
+        self, config: Config, prompt_loader: PromptLoader
+    ) -> None:
+        """Plot layer should create 01_plot.md."""
+        import tempfile
+
+        client = MockLLMClient(
+            responses={
+                "マスタープロット": "# Master Plot\n\nGenerated content"
+            }
+        )
+        state = StoryState(seed_input="test")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            runs_dir = Path(tmpdir)
+
+            result = run_pipeline(
+                state,
+                client,
+                config,
+                prompt_loader,
+                until="plot",
+                runs_dir=runs_dir,
+            )
+
+            assert isinstance(result, Success)
+            assert (runs_dir / "01_plot.md").exists()
+            content = (runs_dir / "01_plot.md").read_text()
+            assert "Master Plot" in content
+
+    def test_backstory_layer_creates_markdown(
+        self, config: Config, prompt_loader: PromptLoader
+    ) -> None:
+        """Backstory layer should create 02_backstory.md."""
+        import tempfile
+
+        client = MockLLMClient(
+            responses={
+                "マスタープロット": "# Plot",
+                "世界設定": "# Backstories\n\nWorld details",
+            }
+        )
+        state = StoryState(seed_input="test")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            runs_dir = Path(tmpdir)
+
+            result = run_pipeline(
+                state,
+                client,
+                config,
+                prompt_loader,
+                until="backstory",
+                runs_dir=runs_dir,
+            )
+
+            assert isinstance(result, Success)
+            assert (runs_dir / "01_plot.md").exists()
+            assert (runs_dir / "02_backstory.md").exists()
+
+    def test_chapter_layer_appends_to_markdown(
+        self, config: Config, prompt_loader: PromptLoader
+    ) -> None:
+        """Chapter layer should append each chapter to 06_chapters.md."""
+        import tempfile
+
+        # Mock responses for chapter generation (returns final chapter immediately)
+        client = MockLLMClient(
+            responses={
+                "章": """```json
+{
+    "chapter_title": "最初で最後の章",
+    "chapter_theme": "テーマ",
+    "chapter_beats": ["ビート1"],
+    "active_characters": ["主人公"],
+    "is_final_chapter": true,
+    "next_chapter_intent": ""
+}
+```"""
+            }
+        )
+
+        # Pre-populate required state
+        state = StoryState(
+            seed_input="test",
+            mpbv=MPBV(
+                master_plot_markdown="# Plot",
+                backstories_markdown="# Backstory",
+            ),
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            runs_dir = Path(tmpdir)
+
+            result = run_pipeline(
+                state,
+                client,
+                config,
+                prompt_loader,
+                only="chapter",
+                runs_dir=runs_dir,
+            )
+
+            assert isinstance(result, Success)
+            assert (runs_dir / "06_chapters.md").exists()
+            content = (runs_dir / "06_chapters.md").read_text()
+            assert "第1章" in content
+            assert "最初で最後の章" in content
+
+    def test_scene_layer_appends_to_markdown(
+        self, config: Config, prompt_loader: PromptLoader
+    ) -> None:
+        """Scene layer should append each scene to 08_scenes.md."""
+        import tempfile
+
+        client = MockLLMClient(
+            responses={
+                "シーン": """# 本文
+
+これはシーンの本文です。
+
+# 次のシーンで描くこと
+
+次のシーン"""
+            }
+        )
+
+        # Pre-populate required state with chapter
+        state = StoryState(
+            seed_input="test",
+            mpbv=MPBV(
+                master_plot_markdown="# Plot",
+                backstories_markdown="# Backstory",
+            ),
+            chapters=[
+                Chapter(
+                    index=0,
+                    title="テスト章",
+                    theme="テーマ",
+                    chapter_beats=["ビート1"],  # One beat = one scene
+                    active_characters=[],
+                    is_final_chapter=True,
+                    next_chapter_intent="",
+                ),
+            ],
+            timelines=[
+                TimelineSlice(chapter_index=0, characters={}),
+            ],
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            runs_dir = Path(tmpdir)
+
+            result = run_pipeline(
+                state,
+                client,
+                config,
+                prompt_loader,
+                only="scene",
+                runs_dir=runs_dir,
+            )
+
+            assert isinstance(result, Success)
+            assert (runs_dir / "08_scenes.md").exists()
+            content = (runs_dir / "08_scenes.md").read_text()
+            assert "シーンの本文" in content
+            assert "第1章" in content

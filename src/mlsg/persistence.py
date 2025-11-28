@@ -146,7 +146,6 @@ def _deserialize_story_state(data: dict[str, Any]) -> StoryState:
                 scene_title=s["scene_title"],
                 text=s["text"],
                 next_scene_intent=s["next_scene_intent"],
-                context_summary=s["context_summary"],
                 is_final_scene=s["is_final_scene"],
             )
             for s in data["scenes"]
@@ -228,9 +227,222 @@ def load_state(path: Path) -> Result[StoryState, StoryError]:
         )
 
 
+def load_external_mpbv(path: Path) -> Result[MPBV, StoryError]:
+    """Load MPBV from an external Markdown file.
+
+    Expected format:
+    ```
+    # Master Plot
+    (master plot content)
+
+    # Backstories
+    (backstories content)
+    ```
+
+    The file is split at "# Backstories" (case-insensitive).
+    If not found, the entire content is treated as master_plot_markdown
+    and backstories_markdown is left empty.
+    """
+    import re
+
+    try:
+        content = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return Failure(
+            StoryError(
+                kind=ErrorKind.IO_ERROR,
+                message=f"MPBV file not found: {path}",
+            )
+        )
+    except OSError as e:
+        return Failure(
+            StoryError(
+                kind=ErrorKind.IO_ERROR,
+                message=f"Failed to read MPBV file: {e}",
+            )
+        )
+
+    # Try to split at "# Backstories" or "# Backstory"
+    pattern = r"(?:^|\n)(#\s*Backstor(?:y|ies)\b)"
+    match = re.search(pattern, content, re.IGNORECASE)
+
+    if match:
+        master_plot_markdown = content[: match.start()].strip()
+        backstories_markdown = content[match.start() :].strip()
+    else:
+        # No split found - treat entire content as combined
+        # Try to find "# Master Plot" to clean up
+        master_match = re.search(r"^#\s*Master\s*Plot\b", content, re.IGNORECASE | re.MULTILINE)
+        if master_match:
+            master_plot_markdown = content.strip()
+        else:
+            master_plot_markdown = content.strip()
+        backstories_markdown = ""
+
+    logger.info("external_mpbv_loaded", path=str(path))
+    return Success(
+        MPBV(
+            master_plot_markdown=master_plot_markdown,
+            backstories_markdown=backstories_markdown,
+        )
+    )
+
+
+def load_external_stylist(path: Path) -> Result[Stylist, StoryError]:
+    """Load Stylist from an external Markdown file.
+
+    The entire file content is used as the raw_markdown.
+    """
+    try:
+        content = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return Failure(
+            StoryError(
+                kind=ErrorKind.IO_ERROR,
+                message=f"Stylist file not found: {path}",
+            )
+        )
+    except OSError as e:
+        return Failure(
+            StoryError(
+                kind=ErrorKind.IO_ERROR,
+                message=f"Failed to read Stylist file: {e}",
+            )
+        )
+
+    logger.info("external_stylist_loaded", path=str(path))
+    return Success(Stylist(raw_markdown=content.strip()))
+
+
+def save_layer_markdown(
+    runs_dir: Path,
+    filename: str,
+    content: str,
+    *,
+    append: bool = False,
+) -> Result[None, StoryError]:
+    """Save layer output as Markdown file.
+
+    Args:
+        runs_dir: Directory to save to
+        filename: Filename (e.g., "01_plot.md")
+        content: Markdown content to write
+        append: If True, append to file (for tail -f support)
+
+    Returns:
+        Success or Failure
+    """
+    try:
+        path = runs_dir / filename
+        mode = "a" if append else "w"
+        with path.open(mode, encoding="utf-8") as f:
+            f.write(content)
+            if append and not content.endswith("\n"):
+                f.write("\n")
+        logger.debug("layer_markdown_saved", path=str(path), append=append)
+        return Success(None)
+    except OSError as e:
+        return Failure(
+            StoryError(
+                kind=ErrorKind.IO_ERROR,
+                message=f"Failed to save markdown: {e}",
+            )
+        )
+
+
+def export_plot_markdown(state: StoryState, runs_dir: Path) -> Result[None, StoryError]:
+    """Export master plot to 01_plot.md."""
+    if state.master_plot is None:
+        return Success(None)
+    return save_layer_markdown(runs_dir, "01_plot.md", state.master_plot.raw_markdown)
+
+
+def export_backstory_markdown(state: StoryState, runs_dir: Path) -> Result[None, StoryError]:
+    """Export backstories to 02_backstory.md."""
+    if state.backstories is None:
+        return Success(None)
+    return save_layer_markdown(runs_dir, "02_backstory.md", state.backstories.raw_markdown)
+
+
+def export_mpbv_markdown(state: StoryState, runs_dir: Path) -> Result[None, StoryError]:
+    """Export MPBV to 03_mpbv.md."""
+    if state.mpbv is None:
+        return Success(None)
+    content = f"{state.mpbv.master_plot_markdown}\n\n---\n\n{state.mpbv.backstories_markdown}"
+    return save_layer_markdown(runs_dir, "03_mpbv.md", content)
+
+
+def export_stylist_markdown(state: StoryState, runs_dir: Path) -> Result[None, StoryError]:
+    """Export stylist to 05_stylist.md."""
+    if state.stylist is None:
+        return Success(None)
+    return save_layer_markdown(runs_dir, "05_stylist.md", state.stylist.raw_markdown)
+
+
+def append_chapter_markdown(
+    state: StoryState, runs_dir: Path, chapter_index: int
+) -> Result[None, StoryError]:
+    """Append a single chapter to 06_chapters.md."""
+    chapter = state.get_chapter_by_index(chapter_index)
+    if chapter is None:
+        return Success(None)
+
+    lines = [
+        f"\n## 第{chapter.index + 1}章: {chapter.title}\n",
+        f"**テーマ**: {chapter.theme}\n",
+        "",
+        "### ビート",
+    ]
+    for i, beat in enumerate(chapter.chapter_beats, 1):
+        lines.append(f"{i}. {beat}")
+    lines.append("")
+    lines.append(f"**登場人物**: {', '.join(chapter.active_characters)}")
+    if chapter.is_final_chapter:
+        lines.append("\n*（最終章）*")
+    lines.append("\n---\n")
+
+    content = "\n".join(lines)
+    return save_layer_markdown(runs_dir, "06_chapters.md", content, append=True)
+
+
+def append_scene_markdown(
+    state: StoryState, runs_dir: Path, chapter_index: int, scene_index: int
+) -> Result[None, StoryError]:
+    """Append a single scene to 08_scenes.md."""
+    scenes = [
+        s for s in state.scenes
+        if s.chapter_index == chapter_index and s.scene_index == scene_index
+    ]
+    if not scenes:
+        return Success(None)
+
+    scene = scenes[0]
+    chapter = state.get_chapter_by_index(chapter_index)
+    chapter_title = chapter.title if chapter else f"第{chapter_index + 1}章"
+
+    lines = [
+        f"\n## 第{chapter_index + 1}章 - シーン{scene_index + 1}",
+        f"*{chapter_title}*\n",
+        scene.text,
+        "\n---\n",
+    ]
+
+    content = "\n".join(lines)
+    return save_layer_markdown(runs_dir, "08_scenes.md", content, append=True)
+
+
 __all__ = [
+    "append_chapter_markdown",
+    "append_scene_markdown",
+    "export_backstory_markdown",
+    "export_mpbv_markdown",
+    "export_plot_markdown",
+    "export_stylist_markdown",
     "from_json",
+    "load_external_mpbv",
+    "load_external_stylist",
     "load_state",
+    "save_layer_markdown",
     "save_state",
     "to_json",
 ]

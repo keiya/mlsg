@@ -91,6 +91,44 @@ mlsg run --from runs/my_story/ --only chapter    # Chapter のみ再実行
 mlsg run --from runs/my_story/                   # 続きから全実行
 ```
 
+### 外部ファイルの注入（Human-in-the-Loop ワークフロー）
+
+生成された MPBV や Stylist を人間や他の LLM（ChatGPT など）がレビュー・編集し、修正版を注入するワークフローをサポートしています。
+
+```bash
+# 1. Plot + Backstory まで生成
+mlsg run "シード" --until backstory
+
+# 2. 生成された内容をレビュー
+#    runs/my_story/state_02_backstory.json の master_plot と backstories を確認
+#    → 修正が必要なら、外部で mpbv.md を作成
+
+# 3. 修正版 MPBV を注入して続行
+mlsg run --from runs/my_story/ --inject-mpbv modified_mpbv.md
+
+# Stylist も外部化する場合
+mlsg run --from runs/my_story/ --inject-mpbv mpbv.md --inject-stylist stylist.md
+```
+
+**外部 MPBV ファイルのフォーマット**:
+
+```markdown
+# Master Plot
+
+## 1. 基本情報 (Basic Information)
+* **ログライン**: ...
+...
+
+# Backstories
+
+## 1. 世界の基本構成 (World Overview)
+...
+```
+
+ファイルは `# Backstories` で分割されます。このヘッダーがない場合は全体が Master Plot として扱われます。
+
+**外部 Stylist ファイル**: ファイル全体がそのまま `raw_markdown` として使用されます。
+
 ### 再実行とリカバリー
 
 パイプラインはレイヤーごとに状態を保存するため、エラー発生時や結果に不満がある場合に途中から再実行できます。
@@ -136,7 +174,15 @@ mlsg export runs/my_story/
 
 # ファイルに出力
 mlsg export runs/my_story/ -o story.md
+
+# HTML 形式でエクスポート（単一ファイル、CSS埋め込み）
+mlsg export runs/my_story/ --format html -o story.html
 ```
+
+**HTML エクスポート**について:
+- 明朝体ベースの小説向けレイアウト CSS を埋め込んだ単一 HTML ファイルを出力
+- 外部依存なしでブラウザで直接開ける
+- レスポンシブ対応（スマホでも読みやすい）
 
 ### オプション
 
