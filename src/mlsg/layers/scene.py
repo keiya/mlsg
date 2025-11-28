@@ -148,12 +148,16 @@ def generate_scene(
         scene_intent_and_events = chapter.chapter_beats[-1] if chapter.chapter_beats else ""
         scene_title = f"シーン {scene_index + 1}"
 
+    # Get stylist guidance if available
+    stylist_guidance = state.stylist.raw_markdown if state.stylist else ""
+
     # Render the prompt template
     prompt_result = prompt_loader.render(
         TEMPLATE_NAME,
         mpbv=state.mpbv.to_combined_markdown(),
         charactors=state.get_characters_markdown(),
         timeline=timeline_str,
+        stylist=stylist_guidance,
         n=chapter_index + 1,
         scene_title=scene_title,
         m=scene_index + 1,

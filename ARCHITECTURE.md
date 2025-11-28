@@ -67,21 +67,22 @@ User Input (seed)
     │
     ▼
 ┌─────────────────────┐
-│  5. Stylist Layer   │  → Stylist (Markdown)
+│  5. Stylist Layer   │  → Stylist (Markdown: 文体ガイドライン)
 └─────────────────────┘
     │
-    ▼
-┌───────────────────┐
-│  6. Chapter Layer │  → list[Chapter] (JSON, iterative)
-└───────────────────┘
-    │
-    ├─── per chapter ───┐
-    ▼                   ▼
-┌────────────────────┐ ┌─────────────────┐
-│  7. Timeline Layer │ │  8. Scene Layer │
-│  → TimelineSlice   │ │  → list[Scene]  │
-│     (JSON)         │ │     (Markdown)  │
-└────────────────────┘ └─────────────────┘
+    ├──────────────────────────────────────┐
+    ▼                                      │
+┌───────────────────┐                      │
+│  6. Chapter Layer │  → list[Chapter]     │ (stylist は Scene へ)
+└───────────────────┘     (JSON)           │
+    │                                      │
+    ├─── per chapter ───┐                  │
+    ▼                   ▼                  ▼
+┌────────────────────┐ ┌─────────────────────┐
+│  7. Timeline Layer │ │  8. Scene Layer     │ ← stylist を参照
+│  → TimelineSlice   │ │  → list[Scene]      │
+│     (JSON)         │ │     (Markdown)      │
+└────────────────────┘ └─────────────────────┘
     │                   │
     └───────────────────┘
             │
@@ -97,14 +98,19 @@ User Input (seed)
 | Backstory | master_plot | Backstories | Markdown | 高め (1.0) | OFF |
 | MPBV | master_plot + backstories | MPBV | Markdown | - | **ON** |
 | Character | mpbv | list[Character] | Markdown | 高め (1.0) | OFF |
-| Stylist | mpbv + characters | Stylist | Markdown | 標準 (0.7) | OFF |
+| Stylist | mpbv | Stylist | Markdown | 標準 (0.7) | OFF |
 | Chapter | mpbv + characters + prev_chapter | Chapter | JSON | 標準 (0.7) | **ON** |
 | Timeline | chapter + prev_timeline | TimelineSlice | JSON | 低め (0.3) | **ON** |
-| Scene | chapter + timeline + prev_scenes | list[Scene] | Markdown | 標準 (0.7) | OFF |
+| Scene | **stylist** + chapter + timeline + prev_scenes | list[Scene] | Markdown | 標準 (0.7) | OFF |
 
 **Thinking の原則:**
 - ON = 論理整合性・構造設計・検証が必要なレイヤー
 - OFF = 創造的生成・散文執筆
+
+**Stylist → Scene の連携:**
+- Stylist Layer は「作家ペルソナ」と「文体ガイドライン」を生成する
+- Scene Layer はこのガイドラインを **最優先指示** として受け取り、全シーンで一貫した文体を保つ
+- 具体的には: ナレーターの性格、文のリズム、語彙選択、比喩の傾向、禁止事項（AI的悪癖の排除）など
 
 ### イテレーティブ生成
 
@@ -207,8 +213,8 @@ class LLMClient(Protocol):
 
 | 用途 | モデル | 備考 |
 |------|--------|------|
-| 初期生成 | Claude Sonnet 4.5 | Thinking 時は Budget Tokens = 31999 |
-| 検証 (MPBV) | GPT 5.1 | Reasoning Effort = high |
+| 初期生成 | Claude Sonnet 4.5 | Thinking 時は Budget Tokens 指定可 |
+| 検証 (MPBV) | Claude Opus 4.5 | Extended Thinking で矛盾検出・統合 |
 | Run 名生成 | Claude Haiku | 軽量・高速 |
 
 ---
@@ -255,9 +261,9 @@ max_retries = 3
 max_parse_retries = 2
 
 [models]
-default = "claude-sonnet-4-5-20250514"
-validation = "gpt-5.1"
-naming = "claude-haiku"
+default = "claude-sonnet-4-5-20250929"
+validation = "claude-opus-4-5-20251101"
+naming = "claude-3-5-haiku-20241022"
 
 [layers.plot]
 model = "claude-sonnet-4-5-20250514"
@@ -272,7 +278,7 @@ max_tokens = 64000
 thinking = false
 
 [layers.mpbv]
-model = "gpt-5.1"
+model = "claude-opus-4-5-20251101"
 temperature = 0.7
 max_tokens = 64000
 thinking = true
@@ -498,7 +504,7 @@ Jinja2 を使用:
 
 ```markdown
 # prompts/05_chapter.md
-あなたは長編小説の「シリーズ構成作家」です。
+あなたは中編小説の「シリーズ構成作家」です。
 ...
 
 ## Master Plot & Backstories

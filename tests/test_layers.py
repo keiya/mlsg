@@ -11,9 +11,13 @@ from mlsg.config import Config, LayerConfig
 from mlsg.domain import (
     Backstories,
     Chapter,
+    Character,
     MasterPlot,
     MPBV,
+    Scene,
     StoryState,
+    Stylist,
+    TimelineSlice,
 )
 from mlsg.errors import ErrorKind, StoryError
 from mlsg.layers.backstory import generate_backstories
@@ -21,7 +25,9 @@ from mlsg.layers.chapter import generate_chapter
 from mlsg.layers.character import generate_characters
 from mlsg.layers.mpbv import validate_mpbv
 from mlsg.layers.plot import generate_master_plot
+from mlsg.layers.scene import generate_scene
 from mlsg.layers.stylist import generate_stylist
+from mlsg.layers.timeline import generate_timeline
 from mlsg.llm.prompts import PromptLoader
 
 
@@ -98,6 +104,8 @@ def config() -> Config:
             "character": LayerConfig(temperature=1.0),
             "stylist": LayerConfig(temperature=0.7),
             "chapter": LayerConfig(temperature=0.7),
+            "timeline": LayerConfig(temperature=0.3),
+            "scene": LayerConfig(temperature=0.7),
         }
     )
 
@@ -416,6 +424,505 @@ class TestChapterLayer:
 
         assert isinstance(result, Failure)
         assert result.failure().kind == ErrorKind.JSON_INVALID
+
+
+class TestTimelineLayer:
+    """Tests for the Timeline layer."""
+
+    def test_generate_timeline_success(
+        self, config: Config, prompt_loader: PromptLoader
+    ) -> None:
+        """Timeline generation should succeed with valid prerequisites."""
+        client = MockLLMClient(
+            responses={
+                "タイムライン": """```json
+{
+    "時雨シン": {
+        "2029-11-01 06:00": "カプセルから覚醒",
+        "2029-11-01 06:30": "ラウンジで朝食"
+    },
+    "カナメ": {
+        "2029-11-01 06:15": "意識同期事件を起こす"
+    }
+}
+```"""
+            }
+        )
+        state = StoryState(
+            seed_input="test",
+            mpbv=MPBV(
+                master_plot_markdown="# Plot",
+                backstories_markdown="# Backstory",
+            ),
+            chapters=[
+                Chapter(
+                    index=0,
+                    title="第一章",
+                    theme="目覚め",
+                    chapter_beats=["覚醒", "出会い"],
+                    active_characters=["時雨シン", "カナメ"],
+                    is_final_chapter=False,
+                    next_chapter_intent="次章へ",
+                ),
+            ],
+        )
+
+        result = generate_timeline(state, client, config, prompt_loader, chapter_index=0)
+
+        assert isinstance(result, Success)
+        new_state = result.unwrap()
+        assert len(new_state.timelines) == 1
+        assert new_state.timelines[0].chapter_index == 0
+        assert "時雨シン" in new_state.timelines[0].characters
+
+    def test_generate_timeline_chapter_index_preserved(
+        self, config: Config, prompt_loader: PromptLoader
+    ) -> None:
+        """Timeline should have correct chapter_index assignment."""
+        client = MockLLMClient(
+            responses={
+                "タイムライン": """```json
+{"キャラA": {"2029-11-01 10:00": "イベント"}}
+```"""
+            }
+        )
+        state = StoryState(
+            seed_input="test",
+            mpbv=MPBV(
+                master_plot_markdown="# Plot",
+                backstories_markdown="# Backstory",
+            ),
+            chapters=[
+                Chapter(
+                    index=0,
+                    title="第一章",
+                    theme="テーマ",
+                    chapter_beats=["ビート"],
+                    active_characters=[],
+                    is_final_chapter=False,
+                    next_chapter_intent="",
+                ),
+                Chapter(
+                    index=1,
+                    title="第二章",
+                    theme="テーマ2",
+                    chapter_beats=["ビート2"],
+                    active_characters=[],
+                    is_final_chapter=True,
+                    next_chapter_intent="",
+                ),
+            ],
+        )
+
+        # Generate timeline for chapter 1 (second chapter)
+        result = generate_timeline(state, client, config, prompt_loader, chapter_index=1)
+
+        assert isinstance(result, Success)
+        new_state = result.unwrap()
+        timeline = new_state.get_timeline_by_chapter(1)
+        assert timeline is not None
+        assert timeline.chapter_index == 1
+
+    def test_generate_timeline_missing_mpbv(
+        self, config: Config, prompt_loader: PromptLoader
+    ) -> None:
+        """Timeline generation should fail without mpbv."""
+        client = MockLLMClient(responses={})
+        state = StoryState(seed_input="test")
+
+        result = generate_timeline(state, client, config, prompt_loader, chapter_index=0)
+
+        assert isinstance(result, Failure)
+        assert result.failure().kind == ErrorKind.MISSING_PREREQUISITE
+
+    def test_generate_timeline_missing_chapter(
+        self, config: Config, prompt_loader: PromptLoader
+    ) -> None:
+        """Timeline generation should fail without the target chapter."""
+        client = MockLLMClient(responses={})
+        state = StoryState(
+            seed_input="test",
+            mpbv=MPBV(
+                master_plot_markdown="# Plot",
+                backstories_markdown="# Backstory",
+            ),
+            chapters=[],  # No chapters
+        )
+
+        result = generate_timeline(state, client, config, prompt_loader, chapter_index=0)
+
+        assert isinstance(result, Failure)
+        assert result.failure().kind == ErrorKind.MISSING_PREREQUISITE
+
+
+class TestSceneLayer:
+    """Tests for the Scene layer."""
+
+    def test_generate_scene_success(
+        self, config: Config, prompt_loader: PromptLoader
+    ) -> None:
+        """Scene generation should succeed with valid prerequisites."""
+        client = MockLLMClient(
+            responses={
+                "シーン": """# 本文
+
+カプセルの蓋が開く音がした。時雨シンは目を開けた。
+
+# 次のシーンで描くこと
+
+シンがラウンジに向かう場面を描く。"""
+            }
+        )
+        state = StoryState(
+            seed_input="test",
+            mpbv=MPBV(
+                master_plot_markdown="# Plot",
+                backstories_markdown="# Backstory",
+            ),
+            chapters=[
+                Chapter(
+                    index=0,
+                    title="第一章",
+                    theme="目覚め",
+                    chapter_beats=["覚醒シーン", "出会いシーン"],
+                    active_characters=["時雨シン"],
+                    is_final_chapter=False,
+                    next_chapter_intent="",
+                ),
+            ],
+            timelines=[
+                TimelineSlice(
+                    chapter_index=0,
+                    characters={},
+                ),
+            ],
+        )
+
+        result = generate_scene(
+            state, client, config, prompt_loader, chapter_index=0, scene_index=0
+        )
+
+        assert isinstance(result, Success)
+        new_state = result.unwrap()
+        assert len(new_state.scenes) == 1
+        assert new_state.scenes[0].chapter_index == 0
+        assert new_state.scenes[0].scene_index == 0
+        assert "カプセル" in new_state.scenes[0].text
+
+    def test_generate_scene_receives_correct_timeline(
+        self, config: Config, prompt_loader: PromptLoader
+    ) -> None:
+        """Scene generation should receive only the timeline for its chapter."""
+        # Track which timeline data was passed to the prompt
+        captured_prompts: list[str] = []
+
+        class CapturingMockClient(MockLLMClient):
+            def complete(
+                self,
+                prompt: str,
+                *,
+                model: str | None = None,
+                temperature: float | None = None,
+                max_tokens: int | None = None,
+                thinking: bool = False,
+                thinking_budget: int | None = None,
+            ) -> Result[str, StoryError]:
+                captured_prompts.append(prompt)
+                return super().complete(
+                    prompt,
+                    model=model,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    thinking=thinking,
+                    thinking_budget=thinking_budget,
+                )
+
+        client = CapturingMockClient(
+            responses={
+                "シーン": """# 本文
+
+テスト本文
+
+# 次のシーンで描くこと
+
+次のシーン"""
+            }
+        )
+
+        # Create timelines for chapters 0 and 1 with distinct content
+        from mlsg.domain import CharacterTimeline, TimelineEvent
+
+        state = StoryState(
+            seed_input="test",
+            mpbv=MPBV(
+                master_plot_markdown="# Plot",
+                backstories_markdown="# Backstory",
+            ),
+            chapters=[
+                Chapter(
+                    index=0,
+                    title="第一章",
+                    theme="テーマ",
+                    chapter_beats=["ビート"],
+                    active_characters=[],
+                    is_final_chapter=False,
+                    next_chapter_intent="",
+                ),
+                Chapter(
+                    index=1,
+                    title="第二章",
+                    theme="テーマ2",
+                    chapter_beats=["ビート2"],
+                    active_characters=[],
+                    is_final_chapter=True,
+                    next_chapter_intent="",
+                ),
+            ],
+            timelines=[
+                TimelineSlice(
+                    chapter_index=0,
+                    characters={
+                        "キャラA": CharacterTimeline(
+                            character_name="キャラA",
+                            events=[
+                                TimelineEvent(
+                                    datetime="2029-11-01 06:00",
+                                    description="CHAPTER_ZERO_UNIQUE_EVENT",
+                                )
+                            ],
+                        )
+                    },
+                ),
+                TimelineSlice(
+                    chapter_index=1,
+                    characters={
+                        "キャラB": CharacterTimeline(
+                            character_name="キャラB",
+                            events=[
+                                TimelineEvent(
+                                    datetime="2029-11-02 06:00",
+                                    description="CHAPTER_ONE_UNIQUE_EVENT",
+                                )
+                            ],
+                        )
+                    },
+                ),
+            ],
+        )
+
+        # Generate scene for chapter 1
+        result = generate_scene(
+            state, client, config, prompt_loader, chapter_index=1, scene_index=0
+        )
+
+        assert isinstance(result, Success)
+        assert len(captured_prompts) == 1
+
+        # The prompt should contain chapter 1's timeline, not chapter 0's
+        prompt = captured_prompts[0]
+        assert "CHAPTER_ONE_UNIQUE_EVENT" in prompt
+        assert "CHAPTER_ZERO_UNIQUE_EVENT" not in prompt
+
+    def test_generate_scene_missing_mpbv(
+        self, config: Config, prompt_loader: PromptLoader
+    ) -> None:
+        """Scene generation should fail without mpbv."""
+        client = MockLLMClient(responses={})
+        state = StoryState(seed_input="test")
+
+        result = generate_scene(
+            state, client, config, prompt_loader, chapter_index=0, scene_index=0
+        )
+
+        assert isinstance(result, Failure)
+        assert result.failure().kind == ErrorKind.MISSING_PREREQUISITE
+
+    def test_generate_scene_missing_chapter(
+        self, config: Config, prompt_loader: PromptLoader
+    ) -> None:
+        """Scene generation should fail without the target chapter."""
+        client = MockLLMClient(responses={})
+        state = StoryState(
+            seed_input="test",
+            mpbv=MPBV(
+                master_plot_markdown="# Plot",
+                backstories_markdown="# Backstory",
+            ),
+            chapters=[],
+        )
+
+        result = generate_scene(
+            state, client, config, prompt_loader, chapter_index=0, scene_index=0
+        )
+
+        assert isinstance(result, Failure)
+        assert result.failure().kind == ErrorKind.MISSING_PREREQUISITE
+
+
+class TestUserInputInPrompts:
+    """Tests to verify user input is properly included in prompts."""
+
+    def test_plot_layer_includes_seed_input(
+        self, config: Config, prompt_loader: PromptLoader
+    ) -> None:
+        """Plot layer prompt should contain the seed input."""
+        client = MockLLMClient(responses={})
+        unique_seed = "UNIQUE_SEED_FOR_WIZARD_STORY_12345"
+        state = StoryState(seed_input=unique_seed)
+
+        generate_master_plot(state, client, config, prompt_loader)
+
+        assert unique_seed in client._last_prompt
+
+    def test_mpbv_layer_includes_prior_content(
+        self, config: Config, prompt_loader: PromptLoader
+    ) -> None:
+        """MPBV layer prompt should contain master_plot and backstories content."""
+        client = MockLLMClient(responses={})
+        unique_plot = "UNIQUE_PLOT_CONTENT_67890"
+        unique_backstory = "UNIQUE_BACKSTORY_CONTENT_11111"
+        state = StoryState(
+            seed_input="test",
+            master_plot=MasterPlot(raw_markdown=unique_plot),
+            backstories=Backstories(raw_markdown=unique_backstory),
+        )
+
+        validate_mpbv(state, client, config, prompt_loader)
+
+        assert unique_plot in client._last_prompt
+        assert unique_backstory in client._last_prompt
+
+    def test_chapter_layer_includes_mpbv_content(
+        self, config: Config, prompt_loader: PromptLoader
+    ) -> None:
+        """Chapter layer prompt should contain mpbv content."""
+        client = MockLLMClient(
+            responses={
+                "章": """```json
+{
+    "chapter_title": "Test",
+    "chapter_theme": "Test",
+    "chapter_beats": ["beat"],
+    "active_characters": [],
+    "is_final_chapter": true,
+    "next_chapter_intent": ""
+}
+```"""
+            }
+        )
+        unique_mpbv_plot = "UNIQUE_MPBV_PLOT_22222"
+        unique_mpbv_backstory = "UNIQUE_MPBV_BACKSTORY_33333"
+        state = StoryState(
+            seed_input="test",
+            mpbv=MPBV(
+                master_plot_markdown=unique_mpbv_plot,
+                backstories_markdown=unique_mpbv_backstory,
+            ),
+        )
+
+        generate_chapter(state, client, config, prompt_loader, chapter_index=0)
+
+        assert unique_mpbv_plot in client._last_prompt
+        assert unique_mpbv_backstory in client._last_prompt
+
+    def test_timeline_layer_includes_chapter_content(
+        self, config: Config, prompt_loader: PromptLoader
+    ) -> None:
+        """Timeline layer prompt should contain chapter beats."""
+        client = MockLLMClient(
+            responses={
+                "タイムライン": """```json
+{"A": {"2029-01-01 00:00": "event"}}
+```"""
+            }
+        )
+        unique_chapter_title = "UNIQUE_CHAPTER_TITLE_44444"
+        unique_beat = "UNIQUE_CHAPTER_BEAT_55555"
+        state = StoryState(
+            seed_input="test",
+            mpbv=MPBV(
+                master_plot_markdown="# Plot",
+                backstories_markdown="# Backstory",
+            ),
+            chapters=[
+                Chapter(
+                    index=0,
+                    title=unique_chapter_title,
+                    theme="テーマ",
+                    chapter_beats=[unique_beat],
+                    active_characters=[],
+                    is_final_chapter=True,
+                    next_chapter_intent="",
+                ),
+            ],
+        )
+
+        generate_timeline(state, client, config, prompt_loader, chapter_index=0)
+
+        assert unique_chapter_title in client._last_prompt
+        assert unique_beat in client._last_prompt
+
+    def test_scene_layer_includes_timeline_and_chapter(
+        self, config: Config, prompt_loader: PromptLoader
+    ) -> None:
+        """Scene layer prompt should contain timeline and chapter beat."""
+        client = MockLLMClient(
+            responses={
+                "シーン": """# 本文
+
+テスト
+
+# 次のシーンで描くこと
+
+次"""
+            }
+        )
+        unique_beat = "UNIQUE_SCENE_BEAT_66666"
+        unique_timeline_event = "UNIQUE_TIMELINE_EVENT_77777"
+
+        from mlsg.domain import CharacterTimeline, TimelineEvent
+
+        state = StoryState(
+            seed_input="test",
+            mpbv=MPBV(
+                master_plot_markdown="# Plot",
+                backstories_markdown="# Backstory",
+            ),
+            chapters=[
+                Chapter(
+                    index=0,
+                    title="章タイトル",
+                    theme="テーマ",
+                    chapter_beats=[unique_beat],
+                    active_characters=[],
+                    is_final_chapter=True,
+                    next_chapter_intent="",
+                ),
+            ],
+            timelines=[
+                TimelineSlice(
+                    chapter_index=0,
+                    characters={
+                        "キャラ": CharacterTimeline(
+                            character_name="キャラ",
+                            events=[
+                                TimelineEvent(
+                                    datetime="2029-01-01 00:00",
+                                    description=unique_timeline_event,
+                                )
+                            ],
+                        )
+                    },
+                ),
+            ],
+        )
+
+        generate_scene(
+            state, client, config, prompt_loader, chapter_index=0, scene_index=0
+        )
+
+        assert unique_beat in client._last_prompt
+        assert unique_timeline_event in client._last_prompt
 
 
 class TestLayerChaining:
