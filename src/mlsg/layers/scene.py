@@ -141,6 +141,12 @@ def generate_scene(
         scene_intent_and_events = chapter.chapter_beats[-1] if chapter.chapter_beats else ""
         scene_title = f"シーン {scene_index + 1}"
 
+    # Get next beat to prevent LLM from jumping ahead
+    if scene_index + 1 < len(chapter.chapter_beats):
+        next_scene_beat = chapter.chapter_beats[scene_index + 1]
+    else:
+        next_scene_beat = ""
+
     # Get stylist guidance if available
     stylist_guidance = state.stylist.raw_markdown if state.stylist else ""
 
@@ -156,6 +162,7 @@ def generate_scene(
         m=scene_index + 1,
         story_so_far_full_text=previous_scenes_text or "(まだシーンがありません)",
         scene_intent_and_events=scene_intent_and_events,
+        next_scene_beat=next_scene_beat,
     )
 
     match prompt_result:
