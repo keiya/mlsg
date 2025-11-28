@@ -73,6 +73,9 @@ class AnthropicClient:
             raise RuntimeError("Anthropic client not initialized - missing API key")
         return self._client
 
+    # Threshold for using streaming (to avoid 10-minute timeout)
+    STREAMING_THRESHOLD = 16000
+
     def _make_request(
         self,
         prompt: str,
@@ -84,6 +87,17 @@ class AnthropicClient:
         thinking_budget: int | None,
     ) -> Result[str, StoryError]:
         """Make a single API request."""
+        # Use streaming for large max_tokens to avoid 10-minute timeout
+        if max_tokens > self.STREAMING_THRESHOLD:
+            return self._make_streaming_request(
+                prompt,
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                thinking=thinking,
+                thinking_budget=thinking_budget,
+            )
+
         try:
             # Build messages with proper type
             messages: list[MessageParam] = [{"role": "user", "content": prompt}]
@@ -130,6 +144,97 @@ class AnthropicClient:
                 model=model,
                 input_tokens=response.usage.input_tokens,
                 output_tokens=response.usage.output_tokens,
+            )
+
+            return Success(result_text)
+
+        except anthropic.RateLimitError as e:
+            return Failure(
+                StoryError(
+                    kind=ErrorKind.LLM_RATE_LIMITED,
+                    message=f"Rate limit exceeded: {e}",
+                )
+            )
+        except anthropic.APIStatusError as e:
+            return Failure(
+                StoryError(
+                    kind=ErrorKind.LLM_CALL_FAILED,
+                    message=f"API error: {e}",
+                )
+            )
+        except anthropic.APIConnectionError as e:
+            return Failure(
+                StoryError(
+                    kind=ErrorKind.LLM_CALL_FAILED,
+                    message=f"Connection error: {e}",
+                )
+            )
+
+    def _make_streaming_request(
+        self,
+        prompt: str,
+        *,
+        model: str,
+        temperature: float,
+        max_tokens: int,
+        thinking: bool,
+        thinking_budget: int | None,
+    ) -> Result[str, StoryError]:
+        """Make a streaming API request for long-running operations."""
+        try:
+            messages: list[MessageParam] = [{"role": "user", "content": prompt}]
+            text_parts: list[str] = []
+            input_tokens = 0
+            output_tokens = 0
+
+            if thinking:
+                thinking_config: ThinkingConfigEnabledParam = {
+                    "type": "enabled",
+                    "budget_tokens": thinking_budget or 10000,
+                }
+                with self.client.messages.stream(
+                    model=model,
+                    max_tokens=max_tokens,
+                    thinking=thinking_config,
+                    messages=messages,
+                ) as stream:
+                    for event in stream:
+                        pass  # Process events to completion
+                    # Get the final message
+                    response = stream.get_final_message()
+                    for block in response.content:
+                        if block.type == "text":
+                            text_parts.append(block.text)
+                    input_tokens = response.usage.input_tokens
+                    output_tokens = response.usage.output_tokens
+            else:
+                with self.client.messages.stream(
+                    model=model,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    messages=messages,
+                ) as stream:
+                    for text in stream.text_stream:
+                        text_parts.append(text)
+                    response = stream.get_final_message()
+                    input_tokens = response.usage.input_tokens
+                    output_tokens = response.usage.output_tokens
+
+            if not text_parts:
+                return Failure(
+                    StoryError(
+                        kind=ErrorKind.LLM_CALL_FAILED,
+                        message="No text content in streaming response",
+                    )
+                )
+
+            result_text = "".join(text_parts)
+
+            logger.debug(
+                "llm_request_completed",
+                model=model,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
             )
 
             return Success(result_text)

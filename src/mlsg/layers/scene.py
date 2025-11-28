@@ -107,23 +107,38 @@ def generate_scene(
     timeline = state.get_timeline_by_chapter(chapter_index)
     timeline_str = json.dumps(timeline.to_dict(), ensure_ascii=False) if timeline else "{}"
 
-    # Get scenes for this chapter
-    chapter_scenes = state.get_scenes_for_chapter(chapter_index)
+    # Get all scenes up to this point (including previous chapters)
+    all_previous_scenes = [
+        s for s in state.scenes
+        if s.chapter_index < chapter_index
+        or (s.chapter_index == chapter_index and s.scene_index < scene_index)
+    ]
 
     # Get previous scene summary and intent
     previous_scene_summary = ""
-    if chapter_scenes:
+    if all_previous_scenes:
         # Get the last scene's summary
-        last_scene = chapter_scenes[-1]
+        last_scene = all_previous_scenes[-1]
         previous_scene_summary = last_scene.context_summary or f"直前のシーン: {last_scene.scene_title}"
 
-    # Get previous scenes text (up to last 3)
+    # Build story so far text
+    # Include all previous scenes, grouped by chapter
     previous_scenes_text = ""
-    recent_scenes = chapter_scenes[-3:] if len(chapter_scenes) > 0 else []
-    if recent_scenes:
-        previous_scenes_text = "\n\n---\n\n".join(
-            f"### {s.scene_title}\n\n{s.text}" for s in recent_scenes
-        )
+    if all_previous_scenes:
+        scenes_by_chapter: dict[int, list[Scene]] = {}
+        for s in all_previous_scenes:
+            if s.chapter_index not in scenes_by_chapter:
+                scenes_by_chapter[s.chapter_index] = []
+            scenes_by_chapter[s.chapter_index].append(s)
+
+        parts: list[str] = []
+        for ch_idx in sorted(scenes_by_chapter.keys()):
+            ch = state.get_chapter_by_index(ch_idx)
+            ch_title = ch.title if ch else f"第{ch_idx + 1}章"
+            parts.append(f"## 第{ch_idx + 1}章: {ch_title}")
+            for s in scenes_by_chapter[ch_idx]:
+                parts.append(s.text)
+        previous_scenes_text = "\n\n".join(parts)
 
     # Determine scene setup from chapter beats
     if scene_index < len(chapter.chapter_beats):

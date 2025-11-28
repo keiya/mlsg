@@ -46,6 +46,36 @@ LAYER_ORDER: list[LayerName] = [
 ]
 
 
+def _is_layer_completed(state: StoryState, layer: LayerName) -> bool:
+    """Check if a layer has already been completed based on state."""
+    match layer:
+        case "plot":
+            return state.master_plot is not None
+        case "backstory":
+            return state.backstories is not None
+        case "mpbv":
+            return state.mpbv is not None
+        case "character":
+            return len(state.characters) > 0
+        case "stylist":
+            return state.stylist is not None
+        case "chapter":
+            # Chapter is complete if we have at least one chapter marked as final
+            return any(ch.is_final_chapter for ch in state.chapters)
+        case "timeline":
+            # Timeline is complete if all chapters have timelines
+            return (
+                len(state.chapters) > 0
+                and len(state.timelines) >= len(state.chapters)
+            )
+        case "scene":
+            # Scene is complete if all chapters have their scenes
+            # This is a heuristic - check if any scene is marked final
+            return any(sc.is_final_scene for sc in state.scenes)
+        case _:
+            return False
+
+
 def _sanitize_run_name(name: str) -> str:
     """Sanitize a run name for use as a directory name.
 
@@ -146,6 +176,12 @@ def run_pipeline(
     # Run each layer
     for layer in layers_to_run:
         current_step += 1
+
+        # Skip already completed layers (for resume functionality)
+        if _is_layer_completed(state, layer):
+            logger.info("layer_skipped", layer=layer, reason="already_completed")
+            continue
+
         if on_progress:
             on_progress(layer, current_step, total_steps)
 

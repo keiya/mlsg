@@ -91,6 +91,37 @@ mlsg run --from runs/my_story/ --only chapter    # Chapter のみ再実行
 mlsg run --from runs/my_story/                   # 続きから全実行
 ```
 
+### 再実行とリカバリー
+
+パイプラインはレイヤーごとに状態を保存するため、エラー発生時や結果に不満がある場合に途中から再実行できます。
+
+```bash
+# 中断した run を続きから再開（完了済みレイヤーは自動スキップ）
+mlsg run --from runs/my_story/
+
+# 特定レイヤーだけ再実行（例：Character を再生成）
+# → 先にそのレイヤーの状態ファイルを削除
+rm runs/my_story/state_04_character.json
+mlsg run --from runs/my_story/ --until character
+
+# MPBV を再生成する場合
+rm runs/my_story/state_03_mpbv.json runs/my_story/state_final.json
+mlsg run --from runs/my_story/ --until mpbv
+
+# 最新の状態ファイルから続行
+# （state_02_backstory.json が最新なら mpbv から再開される）
+mlsg run --from runs/my_story/
+```
+
+**状態ファイルの仕組み**:
+- `--from` で指定したディレクトリ内の最新の `state_*.json` を読み込む
+- 各レイヤーは状態を見て「既に完了しているか」を判定
+- 完了済みレイヤーはスキップされる（ログに `layer_skipped` と表示）
+
+**レイヤーを再実行したい場合**:
+1. 再実行したいレイヤー以降の状態ファイルを削除
+2. `--from` で再開
+
 ### 進捗確認とエクスポート
 
 ```bash
