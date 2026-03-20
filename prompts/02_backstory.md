@@ -13,7 +13,12 @@
 
 出力はMarkdown形式で、構造化して記述してください。
 
-# Input Data (Master Plot)
+# Input Data
+
+## User Seed (Original Request)
+{{seed_input}}
+
+## Master Plot
 {{master_plot}}
 
 ---

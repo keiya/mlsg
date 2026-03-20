@@ -774,6 +774,23 @@ class TestUserInputInPrompts:
 
         assert unique_seed in client._last_prompt
 
+    def test_backstory_layer_includes_seed_input(
+        self, config: Config, prompt_loader: PromptLoader
+    ) -> None:
+        """Backstory layer prompt should contain the seed input."""
+        client = MockLLMClient(responses={})
+        unique_seed = "UNIQUE_SEED_FOR_BACKSTORY_TEST_98765"
+        unique_plot = "UNIQUE_PLOT_FOR_BACKSTORY_TEST_54321"
+        state = StoryState(
+            seed_input=unique_seed,
+            master_plot=MasterPlot(raw_markdown=unique_plot),
+        )
+
+        generate_backstories(state, client, config, prompt_loader)
+
+        assert unique_seed in client._last_prompt
+        assert unique_plot in client._last_prompt
+
     def test_mpbv_layer_includes_prior_content(
         self, config: Config, prompt_loader: PromptLoader
     ) -> None:

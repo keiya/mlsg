@@ -46,6 +46,16 @@ class ModelsConfig:
 
 
 @dataclass(frozen=True)
+class LLMProviderConfig:
+    """Configuration for LLM provider."""
+
+    # Provider type: "anthropic" or "bedrock"
+    provider: str = "anthropic"
+    # AWS region for Bedrock (ignored for anthropic provider)
+    aws_region: str = "us-east-1"
+
+
+@dataclass(frozen=True)
 class LayerConfig:
     """Configuration for a single layer."""
 
@@ -66,6 +76,7 @@ class Config:
     models: ModelsConfig = field(default_factory=ModelsConfig)
     retry: RetryConfig = field(default_factory=RetryConfig)
     layers: dict[str, LayerConfig] = field(default_factory=dict)
+    llm_provider: LLMProviderConfig = field(default_factory=LLMProviderConfig)
 
     def get_layer_config(self, layer_name: str) -> LayerConfig:
         """Get configuration for a specific layer, with defaults."""
@@ -177,6 +188,13 @@ def load_config(path: Path | None = None) -> Result[Config, StoryError]:
         if isinstance(layer_data, dict):
             layers[layer_name] = _parse_layer_config(layer_data)
 
+    # Parse llm_provider
+    llm_provider_data = data.get("llm_provider", {})
+    llm_provider = LLMProviderConfig(
+        provider=str(llm_provider_data.get("provider", "anthropic")),
+        aws_region=str(llm_provider_data.get("aws_region", "us-east-1")),
+    )
+
     return Success(
         Config(
             language=language,
@@ -185,6 +203,7 @@ def load_config(path: Path | None = None) -> Result[Config, StoryError]:
             models=models,
             retry=retry,
             layers=layers,
+            llm_provider=llm_provider,
         )
     )
 
@@ -193,6 +212,7 @@ __all__ = [
     "Config",
     "LayerConfig",
     "LimitsConfig",
+    "LLMProviderConfig",
     "ModelsConfig",
     "RetryConfig",
     "load_config",

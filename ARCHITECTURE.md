@@ -95,7 +95,7 @@ User Input (seed)
 | Layer | 入力 | 出力 | 形式 | Temperature | Thinking |
 |-------|------|------|------|-------------|----------|
 | Plot | seed_input | MasterPlot | Markdown | 高め (1.0) | OFF |
-| Backstory | master_plot | Backstories | Markdown | 高め (1.0) | OFF |
+| Backstory | seed_input + master_plot | Backstories | Markdown | 高め (1.0) | OFF |
 | MPBV | master_plot + backstories | MPBV | Markdown | - | **ON** |
 | Character | mpbv | list[Character] | Markdown | 高め (1.0) | OFF |
 | Stylist | mpbv | Stylist | Markdown | 標準 (0.7) | OFF |

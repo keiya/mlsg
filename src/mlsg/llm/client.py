@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import os
 from collections.abc import Iterator
-from dataclasses import dataclass
-from typing import Protocol
+from dataclasses import dataclass, field
+from typing import Protocol, Union
 
 import anthropic
 from anthropic.types import MessageParam, ThinkingConfigEnabledParam
 from dotenv import load_dotenv
 from returns.result import Failure, Result, Success
 
-from ..config import LayerConfig, RetryConfig
+from ..config import LayerConfig, LLMProviderConfig, RetryConfig
 from ..errors import ErrorKind, StoryError
 from ..logging import get_logger
 from .retry import RetryHandler
@@ -21,6 +21,9 @@ logger = get_logger(__name__)
 
 # Load environment variables
 load_dotenv()
+
+# Type alias for the underlying Anthropic client (regular or Bedrock)
+AnthropicClientType = Union[anthropic.Anthropic, anthropic.AnthropicBedrock]
 
 
 class LLMClient(Protocol):
@@ -55,21 +58,64 @@ class LLMClient(Protocol):
 
 @dataclass
 class AnthropicClient:
-    """Anthropic API client implementation."""
+    """Anthropic API client implementation.
+
+    Supports both direct Anthropic API and AWS Bedrock.
+    Configure via provider_config (defaults to Anthropic API).
+    """
 
     default_model: str
     retry_config: RetryConfig
-    _client: anthropic.Anthropic | None = None
+    provider_config: LLMProviderConfig = field(default_factory=LLMProviderConfig)
+    _client: AnthropicClientType | None = field(default=None, init=False)
 
     def __post_init__(self) -> None:
+        if self.provider_config.provider == "bedrock":
+            self._init_bedrock_client()
+        else:
+            self._init_anthropic_client()
+
+    def _init_anthropic_client(self) -> None:
+        """Initialize the direct Anthropic API client."""
         api_key = os.getenv("ANTHROPIC_API_KEY")
         if not api_key:
             logger.warning("ANTHROPIC_API_KEY not found in environment")
-        self._client = anthropic.Anthropic(api_key=api_key) if api_key else None
+            self._client = None
+        else:
+            self._client = anthropic.Anthropic(api_key=api_key)
+
+    def _init_bedrock_client(self) -> None:
+        """Initialize the AWS Bedrock client."""
+        aws_access_key = os.getenv("AWS_ACCESS_KEY_ID")
+        aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+        aws_session_token = os.getenv("AWS_SESSION_TOKEN")
+
+        if not aws_access_key or not aws_secret_key:
+            logger.warning(
+                "AWS credentials not found in environment "
+                "(AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)"
+            )
+            self._client = None
+        else:
+            self._client = anthropic.AnthropicBedrock(
+                aws_access_key=aws_access_key,
+                aws_secret_key=aws_secret_key,
+                aws_session_token=aws_session_token,
+                aws_region=self.provider_config.aws_region,
+            )
+            logger.info(
+                "bedrock_client_initialized",
+                region=self.provider_config.aws_region,
+            )
 
     @property
-    def client(self) -> anthropic.Anthropic:
+    def client(self) -> AnthropicClientType:
         if self._client is None:
+            provider = self.provider_config.provider
+            if provider == "bedrock":
+                raise RuntimeError(
+                    "Bedrock client not initialized - missing AWS credentials"
+                )
             raise RuntimeError("Anthropic client not initialized - missing API key")
         return self._client
 

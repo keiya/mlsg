@@ -49,6 +49,7 @@ def generate_backstories(
     # Render the prompt template
     prompt_result = prompt_loader.render(
         TEMPLATE_NAME,
+        seed_input=state.seed_input,
         master_plot=state.master_plot.raw_markdown,
     )
 

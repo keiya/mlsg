@@ -342,6 +342,7 @@ def create_client(config: Config) -> AnthropicClient:
     return AnthropicClient(
         default_model=config.models.default,
         retry_config=config.retry,
+        provider_config=config.llm_provider,
     )
 
 
