@@ -65,12 +65,19 @@ ANTHROPIC_API_KEY=sk-ant-...
 # 新規ストーリー生成（全レイヤー実行）
 mlsg run "魔法使いの少年が魔法学校に入学する物語"
 
-# ファイルからシードを読み込み
+# ファイルからシードを読み込み（長い文章向け）
 mlsg run -f seed.txt
+
+# stdin からパイプで入力（長い文章向け）
+cat seed.txt | mlsg run
+echo "シードテキスト" | mlsg run
+mlsg run < seed.txt
 
 # run 名を明示指定
 mlsg run "シードテキスト" --name my_story
 ```
+
+**入力の優先順位**: 位置引数 → `-f` オプション → stdin
 
 ### 段階的な実行
 
