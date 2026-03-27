@@ -184,7 +184,8 @@ def _cmd_run(args: argparse.Namespace) -> int:
     setup_logging(verbose=args.verbose, quiet=args.quiet)
 
     # Load configuration
-    config_result = load_config()
+    config_path = Path(args.config) if hasattr(args, "config") and args.config else None
+    config_result = load_config(config_path)
     match config_result:
         case Failure(error):
             print_error(f"Failed to load config: {error.message}")
@@ -538,6 +539,7 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="FILE",
         help="Inject Stylist from external Markdown file (use with --from)",
     )
+    run_parser.add_argument("-c", "--config", metavar="FILE", help="Path to config file")
     run_parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
     run_parser.add_argument("-q", "--quiet", action="store_true", help="Minimal output")
     run_parser.set_defaults(func=_cmd_run)

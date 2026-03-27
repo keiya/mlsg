@@ -942,6 +942,111 @@ class TestUserInputInPrompts:
         assert unique_timeline_event in client._last_prompt
 
 
+class TestPromptTemplateRendering:
+    """Tests for Jinja2 template rendering with max_chapters conditionals."""
+
+    def test_plot_template_single_chapter(self, prompt_loader: PromptLoader) -> None:
+        """max_chapters=1 should produce single-chapter wording."""
+        result = prompt_loader.render(
+            "01_master_plot.md",
+            user_input="テスト",
+            max_chapters=1,
+        )
+        assert isinstance(result, Success)
+        rendered = result.unwrap()
+        assert "1章構成の短編" in rendered
+        assert "最大" not in rendered
+
+    def test_plot_template_multi_chapter(self, prompt_loader: PromptLoader) -> None:
+        """max_chapters>1 should produce multi-chapter wording."""
+        result = prompt_loader.render(
+            "01_master_plot.md",
+            user_input="テスト",
+            max_chapters=3,
+        )
+        assert isinstance(result, Success)
+        rendered = result.unwrap()
+        assert "最大3章" in rendered
+        assert "1章構成の短編" not in rendered
+
+    def test_chapter_template_single_chapter_no_next_intent(
+        self, prompt_loader: PromptLoader
+    ) -> None:
+        """max_chapters=1 should omit next_chapter_intent from sample JSON."""
+        result = prompt_loader.render(
+            "05_chapter.md",
+            n=1,
+            max_chapters=1,
+            previous_chapter_summary="(最初の章です)",
+            previous_chapter_intent="(なし)",
+        )
+        assert isinstance(result, Success)
+        rendered = result.unwrap()
+        assert '"next_chapter_intent"' not in rendered
+        assert '"is_final_chapter": true' in rendered
+        assert "マスタープロットの完全消化" in rendered
+        assert "Intentの継承と更新" not in rendered
+
+    def test_chapter_template_single_chapter_json_valid(
+        self, prompt_loader: PromptLoader
+    ) -> None:
+        """max_chapters=1 sample JSON in the template should be parseable."""
+        import json
+        import re
+
+        result = prompt_loader.render(
+            "05_chapter.md",
+            n=1,
+            max_chapters=1,
+            previous_chapter_summary="(最初の章です)",
+            previous_chapter_intent="(なし)",
+        )
+        rendered = result.unwrap()
+        json_match = re.search(r"```json\s*([\s\S]*?)```", rendered)
+        assert json_match is not None
+        data = json.loads(json_match.group(1))
+        assert data["is_final_chapter"] is True
+        assert "next_chapter_intent" not in data
+
+    def test_chapter_template_multi_chapter_has_next_intent(
+        self, prompt_loader: PromptLoader
+    ) -> None:
+        """max_chapters>1 should include next_chapter_intent in sample JSON."""
+        result = prompt_loader.render(
+            "05_chapter.md",
+            n=1,
+            max_chapters=3,
+            previous_chapter_summary="(最初の章です)",
+            previous_chapter_intent="(なし)",
+        )
+        assert isinstance(result, Success)
+        rendered = result.unwrap()
+        assert "next_chapter_intent" in rendered
+        assert '"is_final_chapter": false' in rendered
+        assert "Intentの継承と更新" in rendered
+
+    def test_chapter_template_multi_chapter_json_valid(
+        self, prompt_loader: PromptLoader
+    ) -> None:
+        """max_chapters>1 sample JSON in the template should be parseable."""
+        import json
+        import re
+
+        result = prompt_loader.render(
+            "05_chapter.md",
+            n=1,
+            max_chapters=3,
+            previous_chapter_summary="(最初の章です)",
+            previous_chapter_intent="(なし)",
+        )
+        rendered = result.unwrap()
+        json_match = re.search(r"```json\s*([\s\S]*?)```", rendered)
+        assert json_match is not None
+        data = json.loads(json_match.group(1))
+        assert data["is_final_chapter"] is False
+        assert "next_chapter_intent" in data
+
+
 class TestLayerChaining:
     """Tests for layer chaining behavior."""
 
