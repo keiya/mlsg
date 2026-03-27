@@ -219,6 +219,24 @@ runs/
     └── state_final.json            # 最終状態
 ```
 
+## ツール
+
+### novel2pdf — PDF出力
+
+生成されたシーン（`08_scenes.md`）をA5文庫本風PDFに変換します。
+
+```bash
+pip install reportlab
+
+# 基本
+python tools/novel2pdf/novel2pdf.py runs/my_story/08_scenes.md
+
+# タイトル指定 + 出力先指定
+python tools/novel2pdf/novel2pdf.py runs/my_story/08_scenes.md -o my_story.pdf --title "作品名"
+```
+
+詳細は [tools/novel2pdf/README.md](tools/novel2pdf/README.md) を参照。
+
 ## 設定
 
 `config.toml` でモデルや生成パラメータを変更できます：
