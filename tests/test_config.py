@@ -26,8 +26,8 @@ class TestConfigDefaults:
 
     def test_default_limits(self) -> None:
         limits = LimitsConfig()
-        assert limits.max_chapters == 20
-        assert limits.max_scenes_per_chapter == 10
+        assert limits.max_chapters == 3
+        assert limits.max_scenes_per_chapter == 4
         assert limits.max_retries == 3
         assert limits.max_parse_retries == 2
 
@@ -100,14 +100,12 @@ class TestConfigMethods:
 class TestLoadConfig:
     """Tests for load_config function."""
 
-    def test_load_nonexistent_returns_default(self) -> None:
-        """When no config file exists, return default config."""
+    def test_load_nonexistent_explicit_returns_failure(self) -> None:
+        """When an explicit config path doesn't exist, return Failure."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            # Change to empty directory
             result = load_config(Path(tmpdir) / "nonexistent.toml")
-            assert isinstance(result, Success)
-            config = result.unwrap()
-            assert config.language == "ja"
+            assert isinstance(result, Failure)
+            assert "not found" in result.failure().message
 
     def test_load_valid_toml(self) -> None:
         toml_content = """

@@ -41,6 +41,7 @@ def generate_master_plot(
     prompt_result = prompt_loader.render(
         TEMPLATE_NAME,
         user_input=state.seed_input,
+        max_chapters=config.limits.max_chapters,
     )
 
     match prompt_result:

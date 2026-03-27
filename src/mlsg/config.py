@@ -30,8 +30,8 @@ class RetryConfig:
 class LimitsConfig:
     """Configuration for generation limits."""
 
-    max_chapters: int = 20
-    max_scenes_per_chapter: int = 10
+    max_chapters: int = 3
+    max_scenes_per_chapter: int = 4
     max_retries: int = 3
     max_parse_retries: int = 2
 
@@ -121,6 +121,7 @@ def load_config(path: Path | None = None) -> Result[Config, StoryError]:
     If no path is provided, looks for config.toml in the current directory
     and then in the package directory.
     """
+    explicit = path is not None
     if path is None:
         # Try current directory first
         path = Path("config.toml")
@@ -129,6 +130,13 @@ def load_config(path: Path | None = None) -> Result[Config, StoryError]:
             path = Path(__file__).parent.parent.parent / "config.toml"
 
     if not path.exists():
+        if explicit:
+            return Failure(
+                StoryError(
+                    kind=ErrorKind.CONFIG_ERROR,
+                    message=f"Config file not found: {path}",
+                )
+            )
         # Return default config if no file found
         return Success(Config())
 
